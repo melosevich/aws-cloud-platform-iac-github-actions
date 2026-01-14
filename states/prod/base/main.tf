@@ -1,0 +1,7 @@
+module "finops_budget" {
+  source = "../../../modules/finops-budget"
+
+  name         = "prod-finops-monthly-budget"
+  limit_amount = 50
+  alert_email  = var.alert_email
+}
