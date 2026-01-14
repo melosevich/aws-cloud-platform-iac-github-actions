@@ -26,10 +26,11 @@ jobs:
           - states/dev/base
           - states/prod/base
 
-    # Job-level environment variables:
-    # - TF_VAR_* are automatically picked up by Terraform
     env:
       TF_VAR_alert_email: ${{ secrets.ALERT_EMAIL }}
+      AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+      AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+      AWS_REGION: eu-central-1
 
     defaults:
       run:
