@@ -110,6 +110,9 @@ jobs:
           echo "ACTIONS_ID_TOKEN_REQUEST_URL=${ACTIONS_ID_TOKEN_REQUEST_URL:-missing}"
           echo "ACTIONS_ID_TOKEN_REQUEST_TOKEN=${ACTIONS_ID_TOKEN_REQUEST_TOKEN:+present}"
 
+      - name: Verify AWS identity
+        run: aws sts get-caller-identity
+          
       - name: Configure AWS credentials (OIDC) - prod
         uses: aws-actions/configure-aws-credentials@v4
         with:
