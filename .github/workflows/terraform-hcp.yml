@@ -6,7 +6,6 @@ on:
     branches: ["main"]
   workflow_dispatch:
 
-# Needed for GitHub OIDC -> AWS STS
 permissions:
   contents: read
   id-token: write
@@ -31,7 +30,6 @@ jobs:
       - name: Terraform fmt (repo)
         run: terraform fmt -check -recursive
 
-      # Validate each stack directory that contains terraform code
       - name: Validate dev bootstrap
         working-directory: states/dev/bootstrap
         run: |
@@ -63,10 +61,15 @@ jobs:
           echo "Role ARN is: ${{ secrets.AWS_ROLE_TO_ASSUME }}"
 
       - name: Configure AWS credentials (OIDC) - dev
+        id: awscreds
         uses: aws-actions/configure-aws-credentials@v4
         with:
           role-to-assume: ${{ secrets.AWS_ROLE_TO_ASSUME }}
           aws-region: ${{ env.AWS_REGION }}
+
+      - name: Verify AWS identity (only if assume succeeded)
+        if: steps.awscreds.outcome == 'success'
+        run: aws sts get-caller-identity
 
       - name: Setup Terraform (HCP token)
         uses: hashicorp/setup-terraform@v3
@@ -82,7 +85,6 @@ jobs:
         env:
           TF_VAR_repo_owner: "melosevich"
           TF_VAR_repo_name: "aws-cloud-platform-iac-github-actions"
-          # Optional if your stack needs it:
           TF_VAR_alert_email: ${{ secrets.ALERT_EMAIL }}
         run: terraform plan -input=false
 
@@ -104,20 +106,16 @@ jobs:
         run: |
           echo "Role ARN is: ${{ secrets.AWS_ROLE_TO_ASSUME }}"
 
-      - name: Debug OIDC token (safe)
-        shell: bash
-        run: |
-          echo "ACTIONS_ID_TOKEN_REQUEST_URL=${ACTIONS_ID_TOKEN_REQUEST_URL:-missing}"
-          echo "ACTIONS_ID_TOKEN_REQUEST_TOKEN=${ACTIONS_ID_TOKEN_REQUEST_TOKEN:+present}"
-
-      - name: Verify AWS identity
-        run: aws sts get-caller-identity
-          
       - name: Configure AWS credentials (OIDC) - prod
+        id: awscreds
         uses: aws-actions/configure-aws-credentials@v4
         with:
           role-to-assume: ${{ secrets.AWS_ROLE_TO_ASSUME }}
           aws-region: ${{ env.AWS_REGION }}
+
+      - name: Verify AWS identity (only if assume succeeded)
+        if: steps.awscreds.outcome == 'success'
+        run: aws sts get-caller-identity
 
       - name: Setup Terraform (HCP token)
         uses: hashicorp/setup-terraform@v3
@@ -146,11 +144,20 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Debug role ARN (masked)
+        run: |
+          echo "Role ARN is: ${{ secrets.AWS_ROLE_TO_ASSUME }}"
+
       - name: Configure AWS credentials (OIDC) - dev
+        id: awscreds
         uses: aws-actions/configure-aws-credentials@v4
         with:
           role-to-assume: ${{ secrets.AWS_ROLE_TO_ASSUME }}
           aws-region: ${{ env.AWS_REGION }}
+
+      - name: Verify AWS identity (only if assume succeeded)
+        if: steps.awscreds.outcome == 'success'
+        run: aws sts get-caller-identity
 
       - name: Setup Terraform (HCP token)
         uses: hashicorp/setup-terraform@v3
@@ -179,11 +186,20 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Debug role ARN (masked)
+        run: |
+          echo "Role ARN is: ${{ secrets.AWS_ROLE_TO_ASSUME }}"
+
       - name: Configure AWS credentials (OIDC) - prod
+        id: awscreds
         uses: aws-actions/configure-aws-credentials@v4
         with:
           role-to-assume: ${{ secrets.AWS_ROLE_TO_ASSUME }}
           aws-region: ${{ env.AWS_REGION }}
+
+      - name: Verify AWS identity (only if assume succeeded)
+        if: steps.awscreds.outcome == 'success'
+        run: aws sts get-caller-identity
 
       - name: Setup Terraform (HCP token)
         uses: hashicorp/setup-terraform@v3
