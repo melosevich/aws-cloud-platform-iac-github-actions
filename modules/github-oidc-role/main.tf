@@ -161,15 +161,15 @@ resource "aws_iam_role_policy_attachment" "budgets_readonly" {
 ############################################################
 data "aws_iam_policy_document" "inline" {
   statement {
-    sid     = "StsGetCallerIdentity"
-    effect  = "Allow"
-    actions = ["sts:GetCallerIdentity"]
+    sid       = "StsGetCallerIdentity"
+    effect    = "Allow"
+    actions   = ["sts:GetCallerIdentity"]
     resources = ["*"]
   }
 }
 
 resource "aws_iam_role_policy" "inline" {
   name   = "${var.role_name}-identity"
-  role  = aws_iam_role.this.id
+  role   = aws_iam_role.this.id
   policy = data.aws_iam_policy_document.inline.json
 }
