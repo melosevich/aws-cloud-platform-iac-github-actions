@@ -1,65 +1,203 @@
-# ☁️ AWS Cloud Platform IaC  
-**GitHub Actions · Terraform CLI · HCP Terraform Backend · Manual Prod Approval**
+# AWS Cloud Platform IaC (Terraform + GitHub Actions + OIDC)
 
-This repository demonstrates a **production-grade Terraform platform** where:
+This repository demonstrates a **modern, secure AWS platform setup** using:
 
-- **GitHub Actions** executes Terraform (CLI-driven)
-- **HCP Terraform (Terraform Cloud)** provides **remote state, locking, and audit**
-- **GitHub Environments** enforce **manual approval for production**
-- Infrastructure is organized using a **multi-state, multi-environment layout**
+- **Terraform** with an **HCP Terraform (Terraform Cloud) remote backend**
+- **GitHub Actions** for CI/CD
+- **AWS OIDC authentication (no static AWS credentials)**
+- **Clear separation between bootstrap and runtime infrastructure**
+- **FinOps guardrails using AWS Budgets and alerts**
 
-This mirrors how Terraform is commonly run in **enterprise CI/CD pipelines** with explicit plan/apply separation and controlled production releases.
-
----
-
-## ✨ What this repo shows
-
-- GitLab-style `modules/` + `states/` layout
-- Multiple environments (`dev`, `prod`)
-- One Terraform **root module per state**
-- CI-driven Terraform execution
-- HCP-backed state (no local state, no S3/DynamoDB)
-- Manual approval gate for production
-- Clean separation of **code vs configuration**
+The design mirrors how real platform teams operate: identity and trust are established once, while day-to-day infrastructure changes flow through CI.
 
 ---
 
-## 🔄 Execution flow (end-to-end)
+## Architecture Overview
+
+### High-level execution flow
 
 ```mermaid
 sequenceDiagram
-  autonumber
-  participant Dev as Developer
-  participant GH as GitHub
-  participant GA as GitHub Actions
-  participant TF as Terraform CLI
-  participant HCP as HCP Terraform
-  participant AWS as AWS
-  participant Approver as Prod Approver
+    autonumber
+    participant Dev as Developer
+    participant GH as GitHub Actions
+    participant HCP as HCP Terraform
+    participant AWS as AWS Account
 
-  Dev->>GH: Open PR or push commit
-  GH->>GA: Trigger workflow
+    Dev->>GH: Push / Pull Request
+    GH->>AWS: Request OIDC token
+    AWS-->>GH: Issue temporary STS credentials
+    GH->>HCP: Terraform init / plan / apply
+    HCP->>AWS: Create / update resources (Budgets)
+```
 
-  GA->>TF: terraform init
-  TF->>HCP: Authenticate (TF_API_TOKEN)
-  HCP-->>TF: Load & lock remote state
+---
 
-  GA->>TF: terraform fmt / validate
-  GA->>TF: terraform plan
-  TF->>AWS: Read current infrastructure
-  AWS-->>TF: Current state
+## Repository Structure
 
-  alt Pull Request
-    Note over GA,TF: Plan only (no apply)
-  else Push to main
-    GA->>TF: terraform apply (dev)
-    TF->>AWS: Apply dev changes
-    TF->>HCP: Update dev state
+```text
+.
+├── modules/
+│   ├── finops-budget/        # Reusable AWS Budget module
+│   └── github-oidc-role/     # Bootstrap-only: GitHub OIDC IAM role
+│
+├── states/
+│   ├── dev/
+│   │   ├── bootstrap/        # One-time SSO bootstrap (manual)
+│   │   └── base/             # Runtime infrastructure (CI-managed)
+│   └── prod/
+│       ├── bootstrap
+│       └── base
+│
+└── .github/
+    └── workflows/
+        └── terraform.yml
+```
 
-    GA-->>Approver: Await prod approval
-    Approver-->>GA: Approve production
+---
 
-    GA->>TF: terraform apply (prod)
-    TF->>AWS: Apply prod changes
-    TF->>HCP: Update prod state
-  end
+## Bootstrap vs Base (Key Concept)
+
+### Bootstrap (manual, SSO-only)
+
+**Purpose**
+- Create the GitHub OIDC provider in AWS
+- Create IAM roles trusted by GitHub Actions
+
+**Characteristics**
+- Executed manually using AWS SSO
+- Rarely changed
+- Never executed by CI
+- Establishes identity and trust boundaries
+
+**Example**
+```bash
+aws sso login --profile admin
+cd states/prod/bootstrap
+terraform init
+terraform apply
+```
+
+---
+
+### Base (CI-managed, OIDC)
+
+**Purpose**
+- Create actual infrastructure:
+  - AWS Budgets
+  - Email alerts
+  - (Future: S3, IAM, data platform, etc.)
+
+**Characteristics**
+- Executed by GitHub Actions
+- Authenticated via AWS OIDC (no access keys)
+- Separate dev/prod environments
+- Manual approval required for prod
+
+---
+
+## Authentication Model
+
+### Why OIDC?
+- Eliminates long-lived AWS credentials
+- Uses short-lived, least-privilege access
+- Strong auditability and reduced blast radius
+
+### How it works
+1. GitHub Actions requests an OIDC token
+2. AWS verifies the token using the GitHub OIDC provider
+3. AWS issues temporary STS credentials
+4. Terraform uses those credentials to manage infrastructure
+
+Each GitHub **environment** (`dev`, `prod`) defines:
+- Its own `AWS_ROLE_TO_ASSUME`
+- Its own approval rules
+
+---
+
+## Terraform State Strategy
+
+- **HCP Terraform remote backend**
+- **One workspace per environment**
+  - `dev/base`
+  - `prod/base`
+- No cross-account or shared state
+
+When environments move to a new AWS account:
+- A new workspace is created
+- Backend configuration is updated
+- Terraform starts from a clean state
+
+---
+
+## FinOps Budget Module
+
+The `finops-budget` module:
+- Creates a monthly AWS Cost Budget
+- Sends email alerts at:
+  - 50%
+  - 80%
+  - 100%
+- Automatically targets the **current AWS account**
+
+```hcl
+data "aws_caller_identity" "current" {}
+
+account_id = data.aws_caller_identity.current.account_id
+```
+
+This makes the module:
+- Account-agnostic
+- Safe across multiple AWS accounts
+- Compatible with both SSO and OIDC
+
+---
+
+## CI/CD Workflow Behavior
+
+### Automatically runs
+- `terraform fmt -check`
+- `terraform validate`
+- `terraform plan` (dev + prod)
+
+### Automatically applies
+- `dev/base` on merge to `main`
+
+### Requires manual approval
+- `prod/base` via GitHub Environments
+
+---
+
+## What Happens If Budgets Are Deleted Manually?
+
+- If deleted in AWS:
+  - Terraform will recreate them on the next apply
+- If removed from Terraform state:
+  - Terraform treats them as new resources
+- If removed from code:
+  - Terraform leaves them deleted
+
+Terraform remains the source of truth.
+
+---
+
+## Design Principles
+
+- Bootstrap once, carefully
+- CI manages runtime infrastructure
+- No static secrets
+- Strong environment isolation
+- Clear auditability
+
+---
+
+## Summary
+
+This repository demonstrates a **production-grade Terraform platform** with:
+
+- Secure OIDC-based authentication
+- Clean separation of identity and infrastructure
+- Real-world FinOps guardrails
+- A scalable foundation for future expansion
+
+This mirrors how modern platform teams design AWS environments at scale.
