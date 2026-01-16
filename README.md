@@ -20,15 +20,17 @@ The design mirrors how real platform teams operate: identity and trust are estab
 sequenceDiagram
     autonumber
     participant Dev as Developer
-    participant GH as GitHub Actions
-    participant HCP as HCP Terraform
+    participant GH as GitHub Actions Runner
+    participant HCP as HCP Terraform (Remote State)
     participant AWS as AWS Account
 
-    Dev->>GH: Push / Pull Request
-    GH->>AWS: Request OIDC token
-    AWS-->>GH: Issue temporary STS credentials
-    GH->>HCP: Terraform init / plan / apply
-    HCP->>AWS: Create / update resources (Budgets)
+    Dev->>GH: Push / Pull Request triggers workflow
+    GH->>AWS: Assume role via OIDC (STS)
+    AWS-->>GH: Temporary credentials
+    GH->>HCP: terraform init/plan/apply (state + locking)
+    GH->>AWS: AWS provider calls Budgets APIs
+    AWS-->>GH: Budget created/updated
+    GH-->>HCP: State updated
 ```
 
 ---
