@@ -1,25 +1,30 @@
-variable "repo_owner" { type = string }
-variable "repo_name" { type = string }
-variable "branch" {
-  type    = string
-  default = "main"
-}
+############################################################
+# Variables for GitHub Actions OIDC Role module
+############################################################
 
+# Name of the IAM role to create
 variable "role_name" {
-  type    = string
-  default = "GitHubActionsFinOpsRole"
+  type        = string
+  description = "IAM role name for GitHub Actions OIDC federation"
+  default     = "GitHubActionsFinOpsRole"
 }
 
+# Optional description for the role
 variable "role_description" {
-  type    = string
-  default = "OIDC role assumed by GitHub Actions"
+  type        = string
+  description = "Description of the GitHub Actions OIDC IAM role"
+  default     = "OIDC role assumed by GitHub Actions"
 }
 
-variable "inline_policy_name" {
-  type    = string
-  default = "GitHubActionsFinOpsBudgetsPolicy"
-}
-
-variable "inline_policy_json" {
-  type = string
+# List of allowed GitHub OIDC subject claims (sub)
+#
+# Examples:
+#   - repo:owner/repo:environment:prod
+#   - repo:owner/repo:environment:dev
+#   - repo:owner/repo:ref:refs/heads/main
+#
+# These values directly control WHO can assume the role.
+variable "github_subjects" {
+  type        = list(string)
+  description = "Allowed GitHub OIDC subject claims (sub)"
 }

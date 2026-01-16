@@ -1,12 +1,10 @@
 module "github_oidc_role" {
   source = "../../../modules/github-oidc-role"
 
-  repo_owner = var.repo_owner
-  repo_name  = var.repo_name
+  role_name        = "GitHubActionsFinOpsRoleProd"
+  role_description = "OIDC role assumed by GitHub Actions (prod)"
 
-  inline_policy_json = file("${path.module}/policies/finops-budgets.json")
-}
-
-output "role_arn" {
-  value = module.github_oidc_role.role_arn
+  github_subjects = [
+    "repo:melosevich/aws-cloud-platform-iac-github-actions:environment:prod"
+  ]
 }
