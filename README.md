@@ -1,4 +1,4 @@
-# AWS Cloud Platform IaC – GitHub Actions + OIDC
+# AWS Cloud Platform IaaC
 
 This repository contains the Infrastructure as Code (IaC) setup for an AWS cloud platform using **Terraform** and **GitHub Actions**, authenticated via **AWS OpenID Connect (OIDC)**.
 
