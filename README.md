@@ -8,30 +8,58 @@ This repository demonstrates a **modern, secure AWS platform setup** using:
 - **Clear separation between bootstrap and runtime infrastructure**
 - **FinOps guardrails using AWS Budgets and alerts**
 
-The design mirrors how real platform teams operate: identity and trust are established once, while day-to-day infrastructure changes flow through CI.
+The design mirrors how real platform teams operate: **identity and trust are established once**, while day-to-day infrastructure changes flow safely through CI.
 
 ---
 
 ## Architecture Overview
 
-### High-level execution flow
+### High-level execution flow (Bootstrap + Runtime)
 
 ```mermaid
 sequenceDiagram
     autonumber
+
+    participant Admin as Platform Admin
     participant Dev as Developer
     participant GH as GitHub Actions Runner
     participant HCP as HCP Terraform (Remote State)
     participant AWS as AWS Account
 
-    Dev->>GH: Push / Pull Request triggers workflow
-    GH->>AWS: Assume role via OIDC (STS)
+    %% -------------------------
+    %% Bootstrap phase (Day 0)
+    %% -------------------------
+    rect rgb(235, 245, 255)
+    note over Admin,AWS: Bootstrap (manual, SSO-only)
+
+    Admin->>AWS: Authenticate via AWS SSO
+    Admin->>AWS: Create GitHub OIDC provider
+    Admin->>AWS: Create IAM roles trusted by GitHub
+    note over AWS: Trust boundary established
+    end
+
+    %% -------------------------
+    %% Runtime phase (Day 1+)
+    %% -------------------------
+    rect rgb(240, 255, 240)
+    note over Dev,AWS: Runtime infrastructure (CI-managed)
+
+    Dev->>GH: Push / Pull Request
+    GH->>AWS: Request OIDC token & assume role (STS)
     AWS-->>GH: Temporary credentials
-    GH->>HCP: terraform init/plan/apply (state + locking)
-    GH->>AWS: AWS provider calls Budgets APIs
-    AWS-->>GH: Budget created/updated
+    GH->>HCP: terraform init / plan / apply
+    GH->>AWS: Terraform manages Budgets
+    AWS-->>GH: Budgets created / updated
     GH-->>HCP: State updated
+    end
 ```
+
+The diagram shows two distinct phases:
+
+- **Bootstrap (day 0)**: Manual, SSO-authenticated setup of identity and trust  
+- **Runtime (day 1+)**: Fully automated infrastructure changes via GitHub Actions  
+
+This separation intentionally prevents CI from modifying its own trust boundaries.
 
 ---
 
@@ -66,11 +94,15 @@ sequenceDiagram
 - Create the GitHub OIDC provider in AWS
 - Create IAM roles trusted by GitHub Actions
 
+**Why manual**
+- GitHub Actions cannot create the IAM trust it later relies on
+- Prevents circular trust and privilege escalation
+- Establishes a protected identity boundary
+
 **Characteristics**
 - Executed manually using AWS SSO
 - Rarely changed
 - Never executed by CI
-- Establishes identity and trust boundaries
 
 **Example**
 ```bash
@@ -85,7 +117,7 @@ terraform apply
 ### Base (CI-managed, OIDC)
 
 **Purpose**
-- Create actual infrastructure:
+- Create runtime infrastructure:
   - AWS Budgets
   - Email alerts
   - (Future: S3, IAM, data platform, etc.)
