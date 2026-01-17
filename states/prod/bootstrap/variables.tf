@@ -1,6 +1,4 @@
 variable "aws_profile" {
-  type = string
+  type    = string
+  default = "melosevich-prod"
 }
-
-variable "repo_owner" { type = string }
-variable "repo_name" { type = string }
