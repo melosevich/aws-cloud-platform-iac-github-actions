@@ -5,6 +5,6 @@ module "github_oidc_role" {
   role_description = "OIDC role assumed by GitHub Actions (dev)"
 
   github_subjects = [
-    "repo:melosevich/aws-cloud-platform-iac-github-actions:environment:dev"
+    "repo:gonzalo-labs/aws-cloud-platform-iac-github-actions:environment:dev"
   ]
 }
