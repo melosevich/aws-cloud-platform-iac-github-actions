@@ -1,217 +1,151 @@
-# AWS Cloud Platform IaC (Terraform + GitHub Actions + OIDC)
+# AWS Cloud Platform IaC – GitHub Actions + OIDC
 
-This repository demonstrates a **modern, secure AWS platform setup** using:
+This repository contains the Infrastructure as Code (IaC) setup for an AWS cloud platform using Terraform and GitHub Actions with AWS OIDC authentication.
 
-- **Terraform** with an **HCP Terraform (Terraform Cloud) remote backend**
-- **GitHub Actions** for CI/CD
-- **AWS OIDC authentication (no static AWS credentials)**
-- **Clear separation between bootstrap and runtime infrastructure**
-- **FinOps guardrails using AWS Budgets and alerts**
-
-The design mirrors how real platform teams operate: **identity and trust are established once**, while day-to-day infrastructure changes flow safely through CI.
+The architecture follows a deliberate and realistic lifecycle that reflects real-world AWS security and trust constraints. In particular, day-zero bootstrap is manual by design and intentionally kept outside CI/CD.
 
 ---
 
-## Architecture Overview
+## Design principles
 
-### Platform architecture (Bootstrap vs Runtime)
-
-```mermaid
-flowchart LR
-  subgraph Bootstrap[Bootstrap]
-    Admin[Admin]
-    Admin -->|SSO| IAM[OIDC provider + roles]
-  end
-
-  subgraph Runtime[Runtime]
-    Dev[Dev]
-    Dev -->|push/PR| GH[GitHub Actions]
-    GH -->|OIDC| STS[STS assume role]
-    STS --> AWS[Budgets API]
-    GH --> HCP[Remote state]
-  end
-
-  IAM --> STS
-```
-
-**What this shows**
-- **Bootstrap** establishes trust and is executed manually
-- **Runtime** consumes that trust via GitHub Actions and OIDC
-- Terraform runs in **GitHub Actions**
-- HCP Terraform is used for **remote state and locking**
-- AWS is modified only through scoped, temporary credentials
+- No long-lived AWS credentials stored in CI/CD
+- GitHub Actions authenticate to AWS using OIDC
+- Clear separation between manual bootstrap and automated provisioning
+- Reusable Terraform modules
+- Strict environment and region isolation
+- Predictable, low-risk infrastructure lifecycle
 
 ---
 
-## Repository Structure
+## Repository structure
 
-```text
-.
-├── modules/
-│   ├── finops-budget/        # Reusable AWS Budget module
-│   └── github-oidc-role/     # Bootstrap-only: GitHub OIDC IAM role
-│
-├── states/
-│   ├── dev/
-│   │   ├── bootstrap/        # One-time SSO bootstrap (manual)
-│   │   └── base/             # Runtime infrastructure (CI-managed)
-│   └── prod/
-│       ├── bootstrap
-│       └── base
-│
-└── .github/
-    └── workflows/
-        └── terraform.yml
-```
+aws-cloud-platform-iac-github-actions
+├── README.md
+├── modules
+│   ├── finops-budget
+│   └── github-oidc-role
+└── states
+    ├── dev
+    │   ├── bootstrap
+    │   ├── base
+    │   └── eu-central-1
+    └── prod
+        ├── bootstrap
+        ├── base
+        └── eu-central-1
 
----
-
-## Bootstrap vs Base (Key Concept)
-
-### Bootstrap (manual, SSO-only)
-
-**Purpose**
-- Create the GitHub OIDC provider in AWS
-- Create IAM roles trusted by GitHub Actions
-
-**Why manual**
-- GitHub Actions cannot create the IAM trust it later relies on
-- Prevents circular trust and privilege escalation
-- Establishes a protected trust boundary
-
-**Characteristics**
-- Executed manually using AWS SSO
-- Rarely changed
-- Never executed by CI
-
-**Example**
-```bash
-aws sso login --profile admin
-cd states/prod/bootstrap
-terraform init
-terraform apply
-```
+Modules contain reusable Terraform components.
+States contain environment- and region-specific Terraform configurations.
 
 ---
 
-### Base (CI-managed, OIDC)
+## Lifecycle overview
 
-**Purpose**
-- Create runtime infrastructure:
-  - AWS Budgets
-  - Email alerts
-  - (Future: S3, IAM, data platform, etc.)
+The platform is built and operated in clearly separated phases.
 
-**Characteristics**
-- Executed by GitHub Actions
-- Authenticated via AWS OIDC (no access keys)
-- Separate dev/prod environments
-- Manual approval required for prod
+### Phase 0 — Manual bootstrap (one-time, outside GitHub Actions)
 
----
+This repository assumes that an initial manual bootstrap has already been completed.
 
-## Authentication Model
+This step cannot be automated on day zero because:
+- No Terraform backend exists yet
+- No trust relationship exists between GitHub and AWS
+- GitHub Actions cannot assume an IAM role that does not yet exist
 
-### Why OIDC?
-- Eliminates long-lived AWS credentials
-- Uses short-lived, least-privilege access
-- Strong auditability and reduced blast radius
+The following resources are created manually, once per AWS account:
 
-### How it works
-1. GitHub Actions requests an OIDC token
-2. AWS verifies the token using the GitHub OIDC provider
-3. AWS issues temporary STS credentials
-4. Terraform uses those credentials to manage infrastructure
+- S3 bucket for Terraform remote state
+- DynamoDB table for Terraform state locking
+- IAM OIDC provider for GitHub Actions
+- Initial IAM role(s) that GitHub Actions will later assume
 
-Each GitHub **environment** (`dev`, `prod`) defines:
-- Its own `AWS_ROLE_TO_ASSUME`
-- Its own approval rules
+This step is intentionally performed outside GitHub Actions using elevated or temporary credentials and is not part of this repository’s automated workflows.
 
 ---
 
-## Terraform State Strategy
+### Phase 1 — Environment bootstrap (states/*/bootstrap)
 
-- **HCP Terraform remote backend**
-- **One workspace per environment**
-  - `dev/base`
-  - `prod/base`
-- No shared or cross-account state
+Purpose:
+- Establish environment-level foundations
+- Prepare the account for safe automation
 
-When environments move to a new AWS account:
-- A new workspace is created
-- Backend configuration is updated
-- Terraform starts from a clean state
+Typical contents:
+- IAM policies
+- Guardrails
+- Account or organization-level configuration
 
----
-
-## FinOps Budget Module
-
-The `finops-budget` module:
-- Creates a monthly AWS Cost Budget
-- Sends email alerts at:
-  - 50%
-  - 80%
-  - 100%
-- Automatically targets the **current AWS account**
-
-```hcl
-data "aws_caller_identity" "current" {}
-
-account_id = data.aws_caller_identity.current.account_id
-```
-
-This makes the module:
-- Account-agnostic
-- Safe across multiple AWS accounts
-- Compatible with both SSO and OIDC
+Execution characteristics:
+- Per environment (dev, prod, etc.)
+- Usually applied manually or with elevated permissions
+- Very low change frequency
 
 ---
 
-## CI/CD Workflow Behavior
+### Phase 2 — Base infrastructure (states/*/base)
 
-### Automatically runs
-- `terraform fmt -check`
-- `terraform validate`
-- `terraform plan` (dev + prod)
+Purpose:
+- Shared infrastructure used across all regions
+- Stable, low-churn components
 
-### Automatically applies
-- `dev/base` on merge to `main`
+Typical contents:
+- AWS Budgets and FinOps controls
+- Shared IAM roles
+- Monitoring foundations
 
-### Requires manual approval
-- `prod/base` via GitHub Environments
-
----
-
-## What Happens If Budgets Are Deleted Manually?
-
-- If deleted in AWS:
-  - Terraform recreates them on the next apply
-- If removed from Terraform state:
-  - Terraform treats them as new resources
-- If removed from code:
-  - Terraform leaves them deleted
-
-Terraform remains the source of truth.
+Execution characteristics:
+- Automated via GitHub Actions
+- Uses OIDC-assumed roles
+- Safe once backend and trust are in place
 
 ---
 
-## Design Principles
+### Phase 3 — Regional infrastructure (states/*/<region>)
 
-- Bootstrap once, carefully
-- CI manages runtime infrastructure
-- No static secrets
-- Strong environment isolation
-- Clear auditability
+Purpose:
+- Region-scoped and workload-specific infrastructure
+
+Typical contents:
+- Regional services
+- Environment-specific resources
+
+Execution characteristics:
+- Fully automated
+- CI/CD driven
+- Uses GitHub Actions with OIDC authentication
+
+---
+
+## Terraform modules
+
+### github-oidc-role
+
+Creates IAM roles that can be assumed by GitHub Actions using OpenID Connect.
+
+Benefits:
+- No stored AWS secrets
+- Short-lived credentials
+- AWS-native authentication model
+
+---
+
+### finops-budget
+
+Encapsulates AWS Budgets and cost control logic.
+
+Benefits:
+- Reusable across environments
+- Centralized FinOps configuration
+- Clear separation of policy and usage
 
 ---
 
 ## Summary
 
-This repository demonstrates a **production-grade Terraform platform** with:
+This repository intentionally separates trust establishment from automation.
 
-- Secure OIDC-based authentication
-- Clean separation of identity and infrastructure
-- Real-world FinOps guardrails
-- A scalable foundation for future expansion
+Manual bootstrap is a one-time prerequisite that enables:
+- Secure GitHub Actions authentication
+- Safe and repeatable Terraform automation
+- Clear operational boundaries
 
-This mirrors how modern platform teams design AWS environments at scale.
+Once bootstrap is complete, all base and regional infrastructure can be managed fully through GitHub Actions using short-lived, auditable credentials.
