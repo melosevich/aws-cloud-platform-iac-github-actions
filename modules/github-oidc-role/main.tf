@@ -172,12 +172,67 @@ data "aws_iam_policy_document" "inline" {
     effect = "Allow"
     actions = [
       "lambda:CreateFunction",
+      "lambda:AddPermission",
       "lambda:UpdateFunctionCode",
       "lambda:UpdateFunctionConfiguration",
       "lambda:GetFunction",
       "lambda:GetFunctionConfiguration",
       "lambda:DeleteFunction",
-      "lambda:ListFunctions"
+      "lambda:ListFunctions",
+      "lambda:RemovePermission"
+    ]
+    resources = ["*"]
+  }
+
+  statement {
+    sid    = "S3Deployment"
+    effect = "Allow"
+    actions = [
+      "s3:CreateBucket",
+      "s3:DeleteBucket",
+      "s3:ListBucket",
+      "s3:GetBucketLocation",
+      "s3:GetBucketVersioning",
+      "s3:PutBucketVersioning",
+      "s3:GetBucketEncryption",
+      "s3:PutBucketEncryption",
+      "s3:GetBucketPublicAccessBlock",
+      "s3:PutBucketPublicAccessBlock",
+      "s3:GetBucketPolicy",
+      "s3:PutBucketPolicy",
+      "s3:DeleteBucketPolicy",
+      "s3:GetBucketTagging",
+      "s3:PutBucketTagging",
+      "s3:DeleteBucketTagging",
+      "s3:PutLifecycleConfiguration",
+      "s3:GetLifecycleConfiguration",
+      "s3:DeleteLifecycleConfiguration",
+      "s3:PutObject",
+      "s3:GetObject",
+      "s3:DeleteObject",
+      "s3:ListBucketMultipartUploads",
+      "s3:AbortMultipartUpload",
+      "s3:ListMultipartUploadParts"
+    ]
+    resources = ["*"]
+  }
+
+  statement {
+    sid    = "EventBridgeRulesAndTargets"
+    effect = "Allow"
+    actions = [
+      "events:PutRule",
+      "events:DeleteRule",
+      "events:DescribeRule",
+      "events:EnableRule",
+      "events:DisableRule",
+      "events:ListRules",
+      "events:PutTargets",
+      "events:RemoveTargets",
+      "events:ListTargetsByRule",
+      "events:TagResource",
+      "events:UntagResource",
+      "events:ListTagsForResource"
     ]
     resources = ["*"]
   }
