@@ -14,52 +14,34 @@ The design mirrors how real platform teams operate: **identity and trust are est
 
 ## Architecture Overview
 
-### High-level execution flow (Bootstrap + Runtime)
+### Platform architecture (Bootstrap vs Runtime)
 
 ```mermaid
-sequenceDiagram
-    autonumber
-
-    participant Admin as Platform Admin
-    participant Dev as Developer
-    participant GH as GitHub Actions Runner
-    participant HCP as HCP Terraform (Remote State)
-    participant AWS as AWS Account
-
-    %% -------------------------
-    %% Bootstrap phase (Day 0)
-    %% -------------------------
-    rect rgb(235, 245, 255)
-    note over Admin,AWS: Bootstrap (manual, SSO-only)
-
-    Admin->>AWS: Authenticate via AWS SSO
-    Admin->>AWS: Create GitHub OIDC provider
-    Admin->>AWS: Create IAM roles trusted by GitHub
-    note over AWS: Trust boundary established
+flowchart LR
+    subgraph Bootstrap["Bootstrap (manual, SSO-only)"]
+        Admin[Platform Admin]
+        Admin -->|AWS SSO| IAM[AWS IAM<br/>OIDC Provider + Roles]
     end
 
-    %% -------------------------
-    %% Runtime phase (Day 1+)
-    %% -------------------------
-    rect rgb(240, 255, 240)
-    note over Dev,AWS: Runtime infrastructure (CI-managed)
+    subgraph Runtime["Runtime (CI-managed)"]
+        Dev[Developer]
+        Dev -->|Push / PR| GH[GitHub Actions]
 
-    Dev->>GH: Push / Pull Request
-    GH->>AWS: Request OIDC token & assume role (STS)
-    AWS-->>GH: Temporary credentials
-    GH->>HCP: terraform init / plan / apply
-    GH->>AWS: Terraform manages Budgets
-    AWS-->>GH: Budgets created / updated
-    GH-->>HCP: State updated
+        GH -->|OIDC| STS[AWS STS]
+        STS --> AWS[AWS APIs<br/>(Budgets)]
+
+        GH --> HCP[HCP Terraform<br/>(State + Locking)]
     end
+
+    IAM --> STS
 ```
 
-The diagram shows two distinct phases:
-
-- **Bootstrap (day 0)**: Manual, SSO-authenticated setup of identity and trust  
-- **Runtime (day 1+)**: Fully automated infrastructure changes via GitHub Actions  
-
-This separation intentionally prevents CI from modifying its own trust boundaries.
+**What this shows**
+- **Bootstrap** establishes trust and is executed manually
+- **Runtime** consumes that trust via GitHub Actions and OIDC
+- Terraform runs in **GitHub Actions**
+- HCP Terraform is used for **remote state and locking**
+- AWS is modified only through scoped, temporary credentials
 
 ---
 
@@ -97,7 +79,7 @@ This separation intentionally prevents CI from modifying its own trust boundarie
 **Why manual**
 - GitHub Actions cannot create the IAM trust it later relies on
 - Prevents circular trust and privilege escalation
-- Establishes a protected identity boundary
+- Establishes a protected trust boundary
 
 **Characteristics**
 - Executed manually using AWS SSO
@@ -155,7 +137,7 @@ Each GitHub **environment** (`dev`, `prod`) defines:
 - **One workspace per environment**
   - `dev/base`
   - `prod/base`
-- No cross-account or shared state
+- No shared or cross-account state
 
 When environments move to a new AWS account:
 - A new workspace is created
@@ -205,7 +187,7 @@ This makes the module:
 ## What Happens If Budgets Are Deleted Manually?
 
 - If deleted in AWS:
-  - Terraform will recreate them on the next apply
+  - Terraform recreates them on the next apply
 - If removed from Terraform state:
   - Terraform treats them as new resources
 - If removed from code:
