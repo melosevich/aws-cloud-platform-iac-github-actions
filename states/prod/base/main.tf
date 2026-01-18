@@ -17,5 +17,5 @@ module "placeholder_lambda" {
   source = "../../../modules/lambdas/placeholder-lambda"
 
   function_name = "prod-placeholder-lambda"
-  role_arn       = module.lambda_execution_role.role_arn
+  role_arn      = module.lambda_execution_role.role_arn
 }
