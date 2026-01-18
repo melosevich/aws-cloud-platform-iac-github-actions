@@ -12,3 +12,10 @@ module "lambda_execution_role" {
   role_name        = "LambdaExecutionRoleDev"
   role_description = "IAM role assumed by AWS Lambda (dev)"
 }
+
+module "placeholder_lambda" {
+  source = "../../../modules/lambdas/placeholder-lambda"
+
+  function_name = "dev-placeholder-lambda"
+  role_arn       = module.lambda_execution_role.role_arn
+}
