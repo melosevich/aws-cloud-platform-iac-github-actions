@@ -1,5 +1,5 @@
 module "github_oidc_role" {
-  source = "../../../modules/github-oidc-role"
+  source = "../../../modules/iam/github-oidc-role"
 
   role_name        = "GitHubActionsRoleProd"
   role_description = "OIDC role assumed by GitHub Actions (prod)"

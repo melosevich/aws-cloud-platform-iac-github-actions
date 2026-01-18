@@ -24,8 +24,10 @@ In particular, **day-zero bootstrap is manual by design and intentionally kept o
 aws-cloud-platform-iac-github-actions
 ├── README.md
 ├── modules
-│   ├── finops-budget
-│   └── github-oidc-role
+│   ├── finops
+│   │   └── budget-guardrails
+│   └── iam
+│       └── github-oidc-role
 └── states
     ├── dev
     │   ├── bootstrap
@@ -156,7 +158,7 @@ This step is intentionally executed **outside GitHub Actions**, using AWS SSO or
 
 ## Terraform modules
 
-### `github-oidc-role`
+### `iam/github-oidc-role`
 
 Creates IAM roles that can be assumed by GitHub Actions using OpenID Connect.
 
@@ -168,7 +170,7 @@ Creates IAM roles that can be assumed by GitHub Actions using OpenID Connect.
 
 ---
 
-### `finops-budget`
+### `finops/budget-guardrails`
 
 Encapsulates AWS Budgets and cost-control logic.
 
