@@ -183,6 +183,7 @@ data "aws_iam_policy_document" "inline" {
       "lambda:UpdateFunctionCode",
       "lambda:UpdateFunctionConfiguration",
       "lambda:GetFunction",
+      "lambda:GetFunctionCodeSigningConfig",
       "lambda:GetFunctionConfiguration",
       "lambda:DeleteFunction",
       "lambda:ListFunctions",
