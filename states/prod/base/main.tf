@@ -19,3 +19,9 @@ module "placeholder_lambda" {
   function_name = "prod-placeholder-lambda"
   role_arn      = module.lambda_execution_role.role_arn
 }
+
+module "base_bucket" {
+  source = "../../../modules/s3/placeholder-bucket"
+
+  name_prefix = "landing"
+}
